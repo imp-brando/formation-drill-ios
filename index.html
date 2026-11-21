@@ -1428,7 +1428,7 @@ function flankTransform(d){
     const s=F.ranks[r].sol[sq]; if(!s) continue;
     const r2 = d>0 ? (W-1-sq) : sq, sq2 = d>0 ? r : (D-1-r);
     ranks2[r2].sol[sq2]=s;
-    s.trans={x:s.x,y:s.y,t0:now(),dur:clock.period}; s.faceAnim={off:-d*90*D2R,t0:now(),dur:clock.period*.8};
+    s.trans={x:s.x,y:s.y,t0:now(),dur:clock.period}; s.faceAnim={off:-d*90*D2R,t0:now(),dur:clock.period*.8}; s.slip=0;
   }
   let cx=0, cy=0;  // centre of the new front rank (= old right or left file)
   for(let sq2=0;sq2<W2;sq2++){ const r=d>0?sq2:(D-1-sq2), sq=d>0?W-1:0, q=ideal(r,sq); cx+=q.x; cy+=q.y; }
@@ -1458,7 +1458,11 @@ function rearTransform(){
     const ng={t:"L", x:ex, y:ey, h:g.h+Math.PI, s0:sTop-sEnd, len: i===iMin ? Infinity : sEnd-g.s0, f:1};
     np.segs.push(ng); map.set(g,ng);
   }
-  const old=F.ranks, W=F.W;
+  const old=F.ranks, W=F.W, D0=old.length;
+  // how each file sits before the about face: closed up on the front rank, or (a short outside file
+  // after a facing) on the rear rank. After the about face it keeps that: the extra men who were at the
+  // back end up at the back again, by their files slowing down while the others catch up.
+  const align=[]; for(let q=0;q<W;q++){ const fr=fileRanks(q); align[W-1-q] = (fr.length && fr[0]>0 && fr[fr.length-1]===D0-1) ? "rear" : "front"; }
   F.ranks=old.slice().reverse().map(rk=>{
     const sol=rk.sol.slice().reverse(), fs=[];
     for(let q=0;q<W;q++){ const o=rk.fs[W-1-q]; fs.push({seg:map.get(o.seg)||np.segs[np.segs.length-1], s:sTop-o.s}); }
@@ -1467,8 +1471,8 @@ function rearTransform(){
   F.path=np; F._fi=null;
   F.cShift=-(F.cShift||0); F.lineTail=-(F.lineTail||0);    // files reversed: the line's tail end swaps sides
   for(const rk of F.ranks) rk.s=rankS(rk);
-  for(const s of allSoldiers()) s.faceAnim={off:-Math.PI,t0:now(),dur:clock.period*.9};
-  coverDown();                    // the old incomplete rear rank is now in front: those men go to the back
+  for(const s of allSoldiers()){ s.faceAnim={off:-Math.PI,t0:now(),dur:clock.period*.9}; if(s.slip) s.slip=-s.slip; }
+  coverDown({align});             // the old incomplete rear rank is now in front: it drops back by slowing down
 }
 
 /* ---------- Counter column (4 files), per TC 3-21.5 ---------- */
@@ -1630,15 +1634,39 @@ function markPivot(sol, q, oldH, front){
   if(front && pa && /^col/.test(pa.id) && !pa.actT){ pa.actT=now(); pa.actBeat=beat; }
 }
 
+/** A man off his slot along his own file (slip>0: behind it, <0: ahead of it) works it off at a
+    normal step: marching, the man behind lengthens his stride (up to 1.25 steps, same cadence) and
+    the man ahead takes half steps; halted (or marking time), he takes natural steps forward or back. */
+const SLIP_HALT_RATE=0.9;   // 30-inch steps per beat when halted
+/** Stride the slips are worked off with: the march's (also through the rear-march pivot, which steps
+    off again in the same step); 0 when halted, marking time or side-stepping. */
+function slipStride(){
+  if(G.move==="pivot"){ const base=G.tempo==="double"?1.2:1.0; return G.prevMove==="half" ? 0.5 : base; }
+  return (G.move==="forward"||G.move==="half") ? strideNow() : 0;
+}
+function stepSlip(s, dtBeats){
+  if(!(dtBeats>0) || G.move==="pivot") return;          // pivoting on the balls of the feet: nobody steps
+  if(s.faceAnim && slipStride()===0) return;             // at the halt: finish facing about, then step
+  const st=slipStride(), sl=s.slip;
+  const rate = st>0 ? st*dtBeats*(sl>0 ? CATCHUP_MAX-1 : 0.5) : SLIP_HALT_RATE*dtBeats;
+  s.slip = Math.abs(sl)<=rate ? 0 : sl-Math.sign(sl)*rate;
+}
 /** Each soldier's displayed position and facing (with transitions), plus measured step speed. */
 function layoutSoldiers(dtBeats, snap){
   if(G && G.phase && G.phase!=="formed") return;          // scattered / falling in: positions handled by scatterUpdate
   const t=now();
   F.ranks.forEach((rk,r)=>rk.sol.forEach((s,sq)=>{
     if(!s) return;
-    const p = F.mode==="counter" ? F.cc.paths[sq].posAt(F.cc.headS[sq]-F.cc.depthQ[sq][r]) : filePos(sq,rk.fs[sq]);
+    if(s.slip) stepSlip(s, dtBeats);
+    const sl=s.slip||0;
+    const p = F.mode==="counter" ? F.cc.paths[sq].posAt(F.cc.headS[sq]-F.cc.depthQ[sq][r]-sl) : filePos(sq, sl ? fileWalk(sq,rk.fs[sq],-sl) : rk.fs[sq]);
     let x=p.x, y=p.y, face=p.h;
-    if(s.trans){ const u=(t-s.trans.t0)/s.trans.dur; if(u>=1) s.trans=null; else { const e=ease(u); x=lerp(s.trans.x,x,e); y=lerp(s.trans.y,y,e); } }
+    if(s.trans){ const u=(t-s.trans.t0)/s.trans.dur; if(u>=1) s.trans=null; else { const e=ease(u);
+      if(s.trans.via){ const pts=[[s.trans.x,s.trans.y],...s.trans.via,[x,y]], L=[]; let tot=0;
+        for(let i=1;i<pts.length;i++){ const l=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]); L.push(l); tot+=l; }
+        let dd=e*tot, i=0; while(i<L.length-1 && dd>L[i]){ dd-=L[i]; i++; } const f=L[i]>0?dd/L[i]:1;
+        x=lerp(pts[i][0],pts[i+1][0],f); y=lerp(pts[i][1],pts[i+1][1],f); }
+      else { x=lerp(s.trans.x,x,e); y=lerp(s.trans.y,y,e); } } }
     if(s.faceAnim){ const u=(t-s.faceAnim.t0)/s.faceAnim.dur; if(u>=1) s.faceAnim=null; else face+=s.faceAnim.off*(1-ease(u)); }
     if(!snap && s.px!==null && dtBeats>0){ const v=Math.hypot(x-s.px,y-s.py)/dtBeats; s.spd=lerp(s.spd, Math.min(v,2), .25); }
     if(snap) s.spd=0;
@@ -1687,57 +1715,83 @@ function dropFile(q){
 }
 /* ---------- Cover down (automatic after joins and every change of direction) ----------
    Fixes only what is broken; a clean formation (and a plain flank or facing of one) doesn't move:
-   1. men ahead of the front rank (an incomplete rank that ended up in front) go to the back;
+   1. men ahead of the front rank (an incomplete rank that ended up in front) drop to the back;
    2. inside a file, men close up toward the front, so no gaps (a short outside file standing at the
-      rear end after a facing is left as it is);
+      rear end after a facing is left as it is). After an about face / rear march each file keeps the
+      alignment it had (opts.align), so the extra men who were at the back are at the back again;
    3. empty ranks and files are dropped (a gap between files closes toward the right file);
    4. facing the front (not flanked) there are never more than 4 files: the men of the extra outside
-      file go to the back;
-   5. when only the rear rank is incomplete, its men stand in the right-hand files.
-   Returns true if anybody moved. */
+      file fall in at the back, walking round behind the formation.
+   Nobody is moved through anybody: a man whose rank changes inside his own file keeps walking his own
+   file's lane and works the difference off with his stride (s.slip, see stepSlip): those files slow
+   down while the others catch up. Returns true if anybody's slot changed. */
 const MAX_FILES=4;
-function coverDown(){
+function coverDown(opts){
   if(!F || F.mode!=="column" || !F.ranks.length) return false;
-  const slotOf=new Map(); F.ranks.forEach((rk,r)=>rk.sol.forEach((s,q)=>{ if(s) slotOf.set(s,{rk,q,x:s.x,y:s.y}); }));
+  const align=(opts&&opts.align)||null;
+  const slotOf=new Map(); F.ranks.forEach((rk,r)=>rk.sol.forEach((s,q)=>{ if(s) slotOf.set(s,{rk,q,x:s.x,y:s.y,p:filePos(q,rk.fs[q])}); }));
   if(!slotOf.size) return false;
   const extra=[];
-  // 1) an incomplete rank standing in front of a fuller one (after about face / rear march) is ahead of
-  //    the front rank: its men go to the back. Empty leading ranks just drop (nobody moves).
+  // 1) an incomplete rank standing in front of a fuller one: its men drop back inside their own files
   const nIn=rk=>rk.sol.filter(Boolean).length;
-  while(F.ranks.length>1 && nIn(F.ranks[0])<nIn(F.ranks[1])){
-    const rk=F.ranks.shift(); for(const m of rk.sol) if(m) extra.push(m);
-  }
+  //    (the files behind it close up on the front, so no rear-standing outside file is kept)
+  const lead = !align && F.ranks.length>1 && nIn(F.ranks[0])<nIn(F.ranks[1]);
   // 3) empty files
   for(let q=F.W-1;q>=0;q--) if(!F.ranks.some(rk=>rk.sol[q])) dropFile(q);
+  if(align) for(let q=align.length-1;q>=F.W;q--) align.pop();
   // 4) facing the front: at most 4 files; the shorter outside file covers down at the back
   while(!F.inLine && F.W>MAX_FILES){
     const nL=fileRanks(0).length, nR=fileRanks(F.W-1).length, q = nL<nR ? 0 : F.W-1;
     for(const rk of F.ranks) if(rk.sol[q]){ extra.push(rk.sol[q]); rk.sol[q]=null; }
-    dropFile(q);
+    dropFile(q); if(align) align.splice(q,1);
   }
-  // 2) close up inside each file
+  // 2) close up inside each file (front, or rear for a short outside file that stood at the rear)
   const D=F.ranks.length;
   for(let q=0;q<F.W;q++){
     const fr=fileRanks(q); if(!fr.length) continue;
-    const contiguous = fr[fr.length-1]-fr[0]===fr.length-1;
-    if(contiguous && (fr[0]===0 || ((q===0||q===F.W-1) && fr[fr.length-1]===D-1))) continue;
-    const men=fr.map(r=>F.ranks[r].sol[q]); fr.forEach(r=>F.ranks[r].sol[q]=null); men.forEach((m,i)=>F.ranks[i].sol[q]=m);
+    const outside = q===0||q===F.W-1;
+    const want = align ? (align[q]==="rear" && outside ? "rear" : "front")
+                       : (outside && fr[0]>0 && fr[fr.length-1]===D-1 && !lead ? "rear" : "front");
+    const start = want==="rear" ? D-fr.length : 0;
+    if(fr[0]===start && fr[fr.length-1]-fr[0]===fr.length-1) continue;
+    const men=fr.map(r=>F.ranks[r].sol[q]); fr.forEach(r=>F.ranks[r].sol[q]=null); men.forEach((m,i)=>F.ranks[start+i].sol[q]=m);
   }
   while(F.ranks.length>1 && !F.ranks[F.ranks.length-1].sol.some(Boolean)) F.ranks.pop();
-  // strays fall in at the back, right file first
+  while(F.ranks.length>1 && !F.ranks[0].sol.some(Boolean)) F.ranks.shift();
+  // strays (only from an extra outside file) fall in at the back, right file first
   for(const m of extra){ const [r,q]=joinSlot(); F.ranks[r].sol[q]=m; }
-  // 5) a lone incomplete rear rank stands on the right
-  const R=F.ranks.length-1, rear=F.ranks[R];
-  if(R>0 && F.ranks.slice(0,R).every(rk=>rk.sol.every(Boolean))){
-    const men=rear.sol.filter(Boolean);
-    if(men.length<F.W && rear.sol.slice(F.W-men.length).some(x=>!x)){ rear.sol.fill(null); men.forEach((m,i)=>rear.sol[F.W-men.length+i]=m); }
-  }
   for(const rk of F.ranks) rk.s=rankS(rk);
-  // anybody whose spot changed steps over to it (two beats), keeping his own ragged offset
-  let moved=false;
+  F._fi=null;
+  // Same file: the man keeps walking his lane; the gap to his new slot is his slip. Another file (only
+  // the extra outside file): he walks round behind the formation to the back.
+  let moved=false; const slipped=[];
   F.ranks.forEach(rk=>rk.sol.forEach((s,q)=>{ if(!s) return; const o=slotOf.get(s);
-    if(!o || o.rk!==rk || o.q!==q || extra.includes(s)){ moved=true; s.trans={x:o?o.x:s.x, y:o?o.y:s.y, t0:now(), dur:clock.period*2}; } }));
-  if(moved || extra.length) F._fi=null;
+    if(!o || (o.rk===rk && o.q===q)) return;
+    moved=true;
+    const np=filePos(q,rk.fs[q]), d=dirV(np.h), n=nrmV(np.h);
+    const ex=o.p.x-np.x, ey=o.p.y-np.y, along=ex*d[0]+ey*d[1], side=ex*n[0]+ey*n[1];
+    if(!extra.includes(s) && Math.abs(side)<0.05){ s.slip=(s.slip||0)-along; slipped.push(s); }
+    else {
+      // round the rear: out behind the rear rank first, then across, then in
+      const R=F.ranks[F.ranks.length-1], rp=filePos(q,R.fs[q]);
+      const back=(rp.x-np.x)*d[0]+(rp.y-np.y)*d[1]-F.rankDist;
+      const cx=o.x+d[0]*(back-((o.x-np.x)*d[0]+(o.y-np.y)*d[1])), cy=o.y+d[1]*(back-((o.x-np.x)*d[0]+(o.y-np.y)*d[1]));
+      const cx2=np.x+d[0]*back, cy2=np.y+d[1]*back;
+      s.slip=0; s.trans={x:o.x, y:o.y, via:[[cx,cy],[cx2,cy2]], t0:now(), dur:clock.period*4};
+    }
+  }));
+  // split the difference: the files that are ahead slow down (half steps) while the files behind
+  // lengthen their stride, so it's over within a step or two. Halted: some step up, some step back.
+  if(slipped.length){
+    const all=allSoldiers(), sl=all.map(s=>s.slip||0), hi=Math.max(...sl), lo=Math.min(...sl);
+    const marching = slipStride()>0;
+    const a=CATCHUP_MAX-1, b=0.5;                          // catch-up / slow-down rate per step
+    const delta = marching ? (b*hi+a*lo)/(a+b) : (hi+lo)/2;   // both groups finish together
+    if(Math.abs(delta)>1e-6){
+      for(const rk of F.ranks){ rk.fs=rk.fs.map((f,q)=>{ const w=fileWalk(q,f,-delta); return {seg:w.seg,s:w.s}; }); rk.s=rankS(rk); }
+      for(const s of all){ s.slip=(s.slip||0)-delta; if(Math.abs(s.slip)<1e-6) s.slip=0; }
+    }
+  }
   return moved;
 }
 /** Put a new soldier straight onto his slot (facing the formation's direction), so nobody straggles. */
@@ -1752,7 +1806,7 @@ function snakeRules(){
   const sol=allSoldiers();
   if(!window.__noWalls) for(const s of sol) if(s.x<0.25||s.x>SNAKE_W-0.25||s.y<0.25||s.y>SNAKE_H-0.25) return broke("You marched into the wall");
   // own formation: front rank vs every rank from the 3rd back (off during maneuvers)
-  if(F.mode==="column" && !G.busy && !sol.some(s=>s.trans) && F.ranks.length>2){
+  if(F.mode==="column" && !G.busy && !sol.some(s=>s.trans||s.slip) && F.ranks.length>2){
     const front=F.ranks[0].sol.filter(Boolean);
     for(let r=2;r<F.ranks.length;r++) for(const b of F.ranks[r].sol) if(b) for(const a of front)
       if(Math.hypot(a.x-b.x,a.y-b.y)<0.55) return broke("You marched into your own formation");
