@@ -1,0 +1,43 @@
+name: iOS app build (simulator, no signing)
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml", "index.html"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the Xcode project from ios/project.yml
+        working-directory: ios
+        run: xcodegen generate
+      - name: Build for the iOS Simulator (compile check, no code signing)
+        working-directory: ios
+        run: |
+          xcodebuild -version
+          xcodebuild -project FormationDrill.xcodeproj -scheme FormationDrill -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+      - name: Check the app bundle (offline copy, usage strings)
+        working-directory: ios
+        run: |
+          APP=$(find build/Build/Products -name "*.app" -maxdepth 3 | head -1)
+          echo "$APP"; ls "$APP"
+          test -f "$APP/Web/index.html"
+          /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c "Print :NSSpeechRecognitionUsageDescription" "$APP/Info.plist"
+          (cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/FormationDrill-simulator.zip" "$(basename "$APP")")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormationDrill-simulator-app
+          path: FormationDrill-simulator.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FormationDrill-xcodeproj
+          path: ios/FormationDrill.xcodeproj

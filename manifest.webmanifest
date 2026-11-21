@@ -1,0 +1,16 @@
+{
+  "name": "Formation Drill (iOS / Safari)",
+  "short_name": "Formation",
+  "description": "Voice-controlled Drill & Ceremony practice game.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#2f3414",
+  "theme_color": "#3b4220",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

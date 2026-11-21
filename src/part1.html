@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#3b4220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Formation">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Formation — Voice Drill &amp; Ceremony Trainer (iOS / Safari)</title>
+<style>
+/* ===== Military palette & base ===== */
+:root{
+  --olive:#4b5320; --olive-d:#2f3414; --olive-l:#6b7536; --khaki:#c3b091; --khaki-l:#e6dcc3;
+  --red:#b3392b; --ink:#1b1d0e;
+  --stencil: "Stencil", "Stencil Std", "Saddlebag", "Army", Impact, "Haettenschweiler", "Arial Narrow Bold", "Arial Black", sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--olive-d);color:var(--khaki-l);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+body{display:flex;justify-content:center}
+/* iOS / Safari: pin the page (no rubber-band bounce), no double-tap zoom, no long-press callout */
+html,body{position:fixed;inset:0;width:100%;overflow:hidden;touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-touch-callout:none}
+button,select,canvas,#hud,#panel{-webkit-user-select:none;user-select:none;touch-action:manipulation}
+#app{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.screen{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#tapResume{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:30;display:none;padding:10px 16px;font-size:14px;background:var(--red);border-color:#ffd9d0}
+#tapResume.on{display:block}
+#app{width:100%;max-width:520px;height:100%;position:relative;overflow:hidden}
+h1,h2,h3,.stencil{font-family:var(--stencil);letter-spacing:.08em;text-transform:uppercase;margin:0}
+button{font-family:var(--stencil);letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--khaki);background:var(--olive);color:var(--khaki-l);padding:12px 14px;border-radius:6px;font-size:16px;cursor:pointer}
+button:active{transform:translateY(1px);background:var(--olive-l)}
+button.primary{background:var(--khaki);color:var(--ink);border-color:var(--khaki-l)}
+button.small{padding:6px 9px;font-size:12px}
+select{font-size:14px;padding:6px;border-radius:5px;background:var(--khaki-l);color:var(--ink);border:1px solid var(--khaki)}
+.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow-y:auto}
+.screen.on{display:flex}
+#start{padding:calc(18px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));gap:12px;background:
+  repeating-linear-gradient(45deg,rgba(0,0,0,.05) 0 10px,transparent 10px 20px),var(--olive-d)}
+.logo{border:3px solid var(--khaki);padding:10px;text-align:center;border-radius:4px}
+.logo h1{font-size:34px;color:var(--khaki-l)}
+.logo div{font-size:12px;letter-spacing:.2em;color:var(--khaki)}
+.card{background:rgba(0,0,0,.25);border:1px solid rgba(195,176,145,.35);border-radius:8px;padding:10px 12px;font-size:14px;line-height:1.4}
+.card b{color:#fff}
+.modes{display:grid;grid-template-columns:1fr;gap:8px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.notice{background:#5a2018;border:1px solid var(--red);color:#ffd9d0;padding:8px 10px;border-radius:6px;font-size:13px;display:none}
+.notice.on{display:block}
+#ref{padding:14px;gap:10px;background:var(--olive-d)}
+#ref table{width:100%;border-collapse:collapse;font-size:13px}
+#ref th,#ref td{border-bottom:1px solid rgba(195,176,145,.25);padding:6px 4px;text-align:left;vertical-align:top}
+#ref th{font-family:var(--stencil);color:var(--khaki);letter-spacing:.06em}
+#ref td.cmd{font-weight:700;color:#fff}
+.tag{display:inline-block;font-size:11px;padding:1px 5px;border-radius:3px;background:var(--olive);border:1px solid var(--khaki);margin-right:3px}
+#game{background:var(--olive-d);overflow:hidden}
+#hud{display:flex;justify-content:space-between;align-items:center;padding:calc(6px + env(safe-area-inset-top)) 10px 4px;gap:6px;background:var(--olive);border-bottom:2px solid var(--khaki)}
+#hud .stat{font-family:var(--stencil);font-size:15px;letter-spacing:.06em}
+#hud .stat small{display:block;font-size:10px;color:var(--khaki);letter-spacing:.12em}
+#fieldWrap{flex:1;position:relative;min-height:0}
+#picaa{position:absolute;z-index:6;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:3px 6px;border-radius:6px;background:rgba(20,22,8,.72);opacity:0;transition:opacity .2s;pointer-events:none;font-family:var(--stencil);font-size:15px}
+#picaa.show{opacity:1}
+#picaa b{width:20px;text-align:center;color:#5a6236;font-weight:700}
+#picaa b.on{color:#ffd27a}
+#picaa b.wait{color:#ffd27a;animation:pblink .6s infinite alternate}
+#picaa b.skip{color:#3c4224;text-decoration:line-through}
+@keyframes pblink{from{opacity:1}to{opacity:.25}}
+#field{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#footInd{position:absolute;left:8px;top:8px;display:flex;gap:4px}
+#footInd span{font-family:var(--stencil);font-size:13px;padding:3px 7px;border-radius:4px;background:rgba(0,0,0,.35);color:var(--khaki);border:1px solid rgba(195,176,145,.4)}
+#footInd span.hit{background:var(--khaki);color:var(--ink)}
+#stateTag{position:absolute;right:8px;top:8px;font-family:var(--stencil);font-size:12px;background:rgba(0,0,0,.4);padding:3px 7px;border-radius:4px;color:var(--khaki-l);text-align:right}
+#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(20,22,8,.78);flex-direction:column;gap:12px;text-align:center;padding:20px}
+#overlay.on{display:flex}
+#overlay h2{font-size:30px;color:#ffd9a0}
+#panel{background:var(--olive);border-top:2px solid var(--khaki);padding:6px 8px calc(6px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:5px}
+#meter{width:100%;height:auto;aspect-ratio:500/70;display:block;background:#1d2010;border-radius:5px}
+#verdict{font-family:var(--stencil);font-size:19px;letter-spacing:.05em;min-height:24px}
+#verdict.ok{color:#9be37f} #verdict.bad{color:#ff9d8a} #verdict.warn{color:#ffd27a}
+#detail{font-size:12px;color:var(--khaki);min-height:15px}
+#heard{font-size:12px;color:#e9e3d0;opacity:.85;min-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#heard i{color:var(--khaki)}
+#heard.faint{opacity:.45}
+#srStatus{font-size:12px;color:#e9e3d0;line-height:1.25;max-height:2.5em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#srStatus.ok{color:#9be37f} #srStatus.warn{color:#ffd27a} #srStatus.bad{color:#ff9d8a}
+#pttBtn{flex:none;line-height:1.1;touch-action:none;user-select:none;-webkit-user-select:none}
+#pttBtn.held{background:var(--red);border-color:#ffd9d0}
+#cadBar{border-top:1px dashed rgba(195,176,145,.4);padding-top:5px}
+#cadBar .row{gap:6px}
+#cadLines{font-size:13px;line-height:1.35;margin-top:4px}
+#cadLines .call{color:#fff}
+#cadLines .resp{color:var(--khaki)}
+#cadLines .now{background:var(--khaki);color:var(--ink);border-radius:3px;padding:0 3px}
+#cadLines .lic{font-size:10px;color:var(--khaki);opacity:.8}
+#cadBar.collapsed #cadBody,#cadBar.collapsed #cadLines,#cadBar.collapsed #cadOpts{display:none}
+#cadOpts{gap:12px;font-size:12px;color:var(--khaki);margin-top:3px}
+#cadOpts input[type=range]{width:110px;vertical-align:middle}
+#cadShuf.on,#cadPlay.on{background:var(--khaki);color:var(--ink)}
+#debug{display:none;gap:4px}
+#debug.on{display:flex}
+#debug input{flex:1;font-size:14px;padding:6px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ================= START SCREEN ================= -->
+<section id="start" class="screen on">
+  <div class="logo"><h1>Formation</h1><div>Voice Drill &amp; Ceremony Trainer</div></div>
+  <div id="noSR" class="notice"><b>Speech recognition isn't available here.</b> <span id="noSRwhy">Open this page in <b>Safari</b> on iOS 14.5 or later, and turn on <b>Siri</b> and <b>Dictation</b> (Settings → General → Keyboard → Enable Dictation). Apps' built-in browsers (Instagram, Facebook, Gmail…) and other iPhone browsers don't have it.</span> Inflection Practice still works.</div>
+  <div id="noMic" class="notice"></div>
+  <div class="card">
+    <b>To start, say "Fall in."</b> Your soldiers begin scattered across the field; calling <b>FALL IN</b> forms them up at attention, but ragged. Next say <b>"Cover"</b> (left arms up, everyone lines up behind the man in front), then <b>"Recover"</b> (arms down, aligned). At the halt, <b>"At close interval… MARCH!"</b> puts right hands on hips with elbows touching the next man and closes the files toward the right file; <b>"Recover"</b> drops the hands and the formation stays at close interval until <b>"Normal interval… MARCH!"</b> opens it back up (that only changes the spacing; it doesn't straighten a ragged formation). <b>"Cover"</b> at close interval also restores normal interval and lines everyone up. Then say <b>"Forward… MARCH!"</b> to step off. At the halt, <b>"Fall out"</b> breaks them up to wander again (score kept); <b>"Fall in"</b> forms them back up. A wrong call for the moment flashes a <b>!</b> over the drill sergeant for a second; nothing else happens.<br><b>Command your formation by voice.</b> Give the <b>preparatory command</b> ("Column right…"), then <b>emphasize the command of execution</b> ("MARCH!"). Make it louder, change your pitch on it, or pause briefly before it.<br>
+    <b>Recruit:</b> any one of those counts. <b>Soldier:</b> any two. <b>Drill Sergeant:</b> all of them, plus a short, sharp execution called on the correct foot. <b>Commands only:</b> no voice check, for warm-up.
+  </div>
+  <div class="card row" style="justify-content:space-between">
+    <label>Sensitivity
+      <select id="sens">
+        <option value="recruit" selected>Recruit (easy)</option>
+        <option value="soldier">Soldier</option>
+        <option value="ds">Drill Sergeant</option>
+        <option value="none">Commands only (warm-up)</option>
+      </select>
+    </label>
+    <label>Unit
+      <select id="unitWord"><option>Platoon</option><option>Squad</option><option>Flight</option></select>
+    </label>
+    <label>Word clarity
+      <select id="clarity" title="How clearly words must be spoken. Inflection is set separately by Sensitivity.">
+        <option value="lenient" selected>Lenient (drill-sergeant slur OK)</option>
+        <option value="standard">Standard</option>
+        <option value="strict">Strict (sound-alikes must be close)</option>
+        <option value="exact">Exact words only</option>
+      </select>
+    </label>
+    <label>Execution timing
+      <select id="execMode" title="Voice burst: the formation moves the instant your MARCH is heard on the voice meter, without waiting for the speech text">
+        <option value="burst" selected>Voice burst (fast)</option>
+        <option value="words">Words only</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="tickOn" checked> Step tick</label>
+    <label style="flex-basis:100%">Mic
+      <select id="micMode">
+        <option value="auto" selected>Auto (recommended)</option>
+        <option value="rec">Speech only (no voice meter)</option>
+        <option value="both">Speech + voice meter (force)</option>
+      </select>
+    </label>
+  </div>
+  <div class="modes">
+    <button class="primary" data-mode="snake">▶ Snake Game: tap to start (enables mic)</button>
+    <button data-mode="drill">Drill Practice (open field)</button>
+    <button data-mode="practice">Inflection Practice (no game)</button>
+    <button id="btnTrain">🎙 Train my voice</button>
+    <button id="btnRef">Command Reference</button>
+  </div>
+  <div class="card" style="font-size:12px">
+    <b>Quick list:</b> <b>Fall, IN (start here)</b> · <b>Fall, OUT</b> · <b>COVER</b> · <b>RECOVER</b> · <b>At close interval, MARCH</b> · <b>Normal interval, MARCH</b> · Forward, MARCH · Platoon, HALT · Column right/left, MARCH · Column half right/left, MARCH · Right/Left flank, MARCH · Rear, MARCH · Counter column, MARCH · Mark time, MARCH · Half step, MARCH · Quick/Double time, MARCH · Change step, MARCH · Right/Left step, MARCH · <b>(1–4) steps to the Right/Left, MARCH</b> · Backward, MARCH · Right/Left/About, FACE · Parade, REST · Stand at, EASE · AT EASE · Platoon, ATTENTION · Dress right, DRESS · Eyes, RIGHT · Ready, FRONT · Open/Close ranks, MARCH · Extend/Close, MARCH.
+    <br><br><b>Snake:</b> soldiers start scattered; say <b>"Fall in"</b> to form up (bumping walls before that doesn't count), then <b>"Cover"</b> and <b>"Recover"</b> to straighten the ragged ranks. Then pick up recruits (gold) to grow the formation. Marching into a wall or into your own formation = <b>FORMATION BROKE</b>.
+    <br>High score: <b id="hiStart">0</b>
+  </div>
+</section>
+
+<!-- ================= TRAIN MY VOICE ================= -->
+<section id="train" class="screen">
+  <div class="row" style="justify-content:space-between"><h2>Train my voice</h2><button class="small" id="trainBack">Back</button></div>
+  <div class="card" style="font-size:13px">Say each command <b>twice</b>, the way you call it on the drill pad. The game saves what the speech recogniser hears from your voice (for example "palm left march") and treats it as that command from now on. Saved on this phone only.</div>
+  <div class="card" id="trainCard" style="text-align:center">
+    <div style="font-size:12px;color:var(--khaki)" id="trainStep">Command 1 of 15 · take 1 of 2</div>
+    <div id="trainCmd" style="font-family:var(--stencil);font-size:26px;margin:6px 0">COLUMN LEFT, MARCH</div>
+    <button class="primary" id="trainRec">🎙 Tap, then say it</button>
+    <div id="trainHeard" style="font-size:12px;min-height:34px;margin-top:6px;color:#e9e3d0"></div>
+    <div class="row" style="justify-content:center;gap:8px;margin-top:4px"><button class="small" id="trainPrev">◀ Back one</button><button class="small" id="trainSkip">Skip ▶</button></div>
+  </div>
+  <div class="card" style="font-size:12px"><b>Learned so far:</b> <span id="trainCount">0</span> phrases. <button class="small" id="trainReset">Reset my voice</button><div id="trainList" style="margin-top:6px;max-height:140px;overflow:auto"></div></div>
+</section>
+
+<!-- ================= COMMAND REFERENCE ================= -->
+<section id="ref" class="screen">
+  <div class="row" style="justify-content:space-between"><h2>Command Reference</h2><button class="small" id="refBack">Back</button></div>
+  <div class="card" style="font-size:12px">Based on TC 3-21.5, Drill and Ceremonies. <b>Foot</b> is the foot that should be striking the ground when you call the command of execution. Squad, Platoon, and Flight are all accepted as the unit word.</div>
+  <div class="card" id="cadHelp" style="font-size:12px"><b>Voiced cadences</b><br>
+  Tap ♪ Cadences, pick one (or 🔀 Shuffle) and tap On. While the platoon marches, the DS calls each line and the platoon sounds off, every line on the left foot, at quick or double time. Keep calling commands: the cadence drops in volume while you talk, ignores its own lyrics, and picks up where it left off on a left foot after your command executes (or when you march again after a halt).</div>
+  <div class="card" style="font-size:12px"><b>Getting heard on the drill pad</b><br>
+  • Hold the phone 6 to 12 inches from your mouth, and don't cover the mic.<br>
+  • Call the preparatory command crisply, pause slightly, then punch the command of execution.<br>
+  • Wind and traffic noise drown out speech: turn your back to the wind or cup the phone.<br>
+  • Clipped drill calls ("colm lef, HARCH", "fowahd, HUT", "platoon, HALT") are fine on Word clarity: Lenient.<br>
+  • If Safari keeps hearing one command as something odd, use <b>🎙 Train my voice</b> on the start screen.<br>
+  • Talk that isn't a drill command is ignored. The status line shows <i>Heard "…" → understood as …</i> for each accepted command.</div>
+  <table id="refTable"><thead><tr><th>Command</th><th>Foot</th><th>What happens</th></tr></thead><tbody></tbody></table>
+</section>
+
+<!-- ================= GAME / DRILL / PRACTICE ================= -->
+<section id="game" class="screen">
+  <div id="hud">
+    <button class="small" id="btnQuit">☰</button>
+    <div class="stat" id="hudScore"><small>Score</small><span id="score">0</span></div>
+    <div class="stat"><small>High</small><span id="hi">0</span></div>
+    <div class="stat"><small>Strength</small><span id="strength">8</span></div>
+    <div class="stat"><small>Cadence</small><span id="bpm">96</span></div>
+  </div>
+  <div id="fieldWrap">
+    <div id="picaa" title="Preparatory command · Intermediate (thinking) step · Command of execution · Additional step · Action step"><b>P</b><b>I</b><b>C</b><b>A</b><b>A</b></div><canvas id="field"></canvas>
+    <div id="footInd"><span id="fL">LEFT</span><span id="fR">RIGHT</span></div>
+    <div id="stateTag">AT THE HALT</div>
+    <button id="tapResume" type="button">🎙 Tap to resume listening</button><div id="overlay"><h2 id="ovTitle">Formation broke</h2><div id="ovText"></div><button class="primary" id="ovBtn">Restart</button><div style="font-size:12px;color:var(--khaki)">🎙 Mic is off. Tap to restart, then call FALL IN.</div></div>
+  </div>
+  <div id="panel">
+    <canvas id="meter" width="500" height="84"></canvas>
+    <div id="verdict">Say "Fall in", then "Cover", "Recover"</div>
+    <div id="detail"></div>
+    <div class="row" style="flex-wrap:nowrap;gap:6px">
+      <div style="flex:1;min-width:0">
+        <div id="srStatus">Speech: starting…</div>
+        <div id="heard"><i>Heard:</i> <span id="heardTxt">—</span></div>
+      </div>
+      <button id="pttBtn" class="small" title="Hold while you speak if commands aren't being heard">🎙 Hold<br>to talk</button>
+    </div>
+    <div id="debug"><input id="dbgIn" placeholder="debug: type a command, e.g. column right march"><button class="small" id="dbgGo">Send</button></div>
+    <div id="cadBar" class="collapsed">
+      <div class="row">
+        <button class="small" id="cadToggle">♪ Cadences</button>
+        <div id="cadBody" class="row" style="flex:1;gap:5px">
+          <select id="cadSel" style="flex:1;min-width:120px" title="Cadence"></select>
+          <button class="small" id="cadShuf" title="Shuffle cadences" aria-pressed="false">🔀</button>
+          <button class="small" id="cadPlay" title="Voiced cadence on/off">▶ On</button>
+        </div>
+      </div>
+      <div id="cadOpts" class="row">
+        <label title="Cadence volume">🔊 <input type="range" id="cadVol" min="0" max="1" step="0.05"></label>
+        <label><input type="checkbox" id="cadLyr"> Lyrics</label>
+      </div>
+      <div id="cadLines"></div>
+    </div>
+  </div>
+</section>
+</div>

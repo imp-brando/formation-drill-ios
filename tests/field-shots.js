@@ -1,0 +1,15 @@
+const puppeteer=require('puppeteer-core'), P=require('path');
+(async()=>{ const b=await puppeteer.launch({executablePath:'/usr/bin/google-chrome',headless:'new',args:['--no-sandbox']});
+ const p=await b.newPage(); await p.setViewport({width:390,height:844,deviceScaleFactor:2,isMobile:true,hasTouch:true});
+ const errs=[]; p.on('pageerror',e=>errs.push(e.message));
+ await p.goto('file://'+P.resolve(__dirname,'../index.html')); const S=P.resolve(__dirname,'../shots')+'/';
+ await p.evaluate(()=>FG.startHeadless('snake'));
+ const info=await p.evaluate(()=>{ const r=document.getElementById('field').getBoundingClientRect(); return {field:[SNAKE_W,SNAKE_H], canvasCss:[Math.round(r.width),Math.round(r.height)], stepPx:+(Math.min(r.width/SNAKE_W,r.height/SNAKE_H)).toFixed(1)}; });
+ await p.screenshot({path:S+'field-snake-start.png'});
+ await p.evaluate(()=>{ FG.cmd('forward march'); FG.sim(1800); FG.cmd('column right march'); FG.sim(1100); });
+ await p.screenshot({path:S+'field-snake-wheel.png'});
+ await p.evaluate(()=>{ FG.sim(3000); });
+ await p.screenshot({path:S+'field-snake-marching.png'});
+ await p.evaluate(()=>{ FG.startHeadless('drill'); FG.cmd('forward march'); FG.sim(1500); FG.cmd('column half left march'); FG.sim(5000); });
+ await p.screenshot({path:S+'field-drill.png'});
+ console.log(JSON.stringify(info), 'errors', errs); await b.close(); })();

@@ -1,0 +1,96 @@
+
+<!-- =====================================================================
+     CADENCE DATA MODULE
+     Every entry has license and source fields. Only traditional cadences
+     with no identified author or copyright claimant are bundled. Licensed
+     or premium packs can be added later with FormationCadences.registerPack()
+     (this build has no paywall; `tier` is just a label).
+     Lines: {c: call (drill sergeant), r: response (platoon)}. Each half-line gets
+     exactly 4 steps (so every half starts on the LEFT foot) with no gap between them.
+     Voiced audio: audio/cadence/<id>-<variant>.mp3 sprites (see tools/gen_cadence.py).
+====================================================================== -->
+<script id="cadence-data">
+window.FormationCadences = (function(){
+  const TRAD = "Traditional U.S. military oral folklore. No known author or copyright claimant found.";
+  const packs = [{
+    id: "core-traditional", title: "Traditional (bundled)", tier: "free", license: TRAD,
+    cadences: [
+      { id:"everywhere", title:"Everywhere we go", tempo:"quick", license:TRAD, source:"Oral tradition (U.S. Army basic training)", form:"repeat after me",
+        lines:[
+          {c:"Everywhere we go", r:"Everywhere we go"},
+          {c:"People wanna know", r:"People wanna know"},
+          {c:"Who we are", r:"Who we are"},
+          {c:"So we tell them", r:"So we tell them"},
+          {c:"We are the Army", r:"We are the Army"},
+          {c:"Mighty, mighty Army", r:"Mighty, mighty Army"},
+          {c:"Rough and tough Army", r:"Rough and tough Army"},
+          {c:"Proud and strong Army", r:"Proud and strong Army"}]},
+      { id:"c130", title:"C-130 rollin' down the strip", tempo:"quick", license:TRAD, source:"Oral tradition (U.S. Army Airborne)", form:"repeat after me",
+        lines:[
+          {c:"C-130 rollin' down the strip", r:"C-130 rollin' down the strip"},
+          {c:"Airborne daddy gonna take a little trip", r:"Airborne daddy gonna take a little trip"},
+          {c:"Stand up, hook up, shuffle to the door", r:"Stand up, hook up, shuffle to the door"},
+          {c:"Jump right out and count to four", r:"Jump right out and count to four"},
+          {c:"If my main don't open wide", r:"If my main don't open wide"},
+          {c:"I got a reserve by my side", r:"I got a reserve by my side"}]},
+      { id:"mama-mama", title:"Mama, Mama, can't you see", tempo:"quick", license:TRAD + " Clean verses only.", source:"Oral tradition (U.S. Army basic training)", form:"repeat after me",
+        lines:[
+          {c:"Mama, Mama, can't you see", r:"Mama, Mama, can't you see"},
+          {c:"What the Army's done to me", r:"What the Army's done to me"},
+          {c:"They took away my faded jeans", r:"They took away my faded jeans"},
+          {c:"Now I'm wearing Army greens", r:"Now I'm wearing Army greens"},
+          {c:"They put me in a barber's chair", r:"They put me in a barber's chair"},
+          {c:"Spun me around, I had no hair", r:"Spun me around, I had no hair"}]},
+      { id:"up-in-the-morning", title:"Up in the morning", tempo:"quick", license:TRAD, source:"Oral tradition (U.S. Army basic training)", form:"repeat after me",
+        lines:[
+          {c:"Up in the morning with the rising sun", r:"Up in the morning with the rising sun"},
+          {c:"Gonna march all day till the march is done", r:"Gonna march all day till the march is done"},
+          {c:"Left foot, right foot, keep it in line", r:"Left foot, right foot, keep it in line"},
+          {c:"Shoulders back and we're doing fine", r:"Shoulders back and we're doing fine"}]},
+      { id:"captain-jack", title:"Hey, hey, Captain Jack", tempo:"quick", license:TRAD, source:"Oral tradition (U.S. Army and Marine Corps)", form:"repeat after me",
+        lines:[
+          {c:"Hey, hey, Captain Jack", r:"Hey, hey, Captain Jack"},
+          {c:"Meet me down by the railroad track", r:"Meet me down by the railroad track"},
+          {c:"With my rifle in my hand", r:"With my rifle in my hand"},
+          {c:"I'm gonna be a fighting man", r:"I'm gonna be a fighting man"},
+          {c:"A fighting man, a fighting man", r:"A fighting man, a fighting man"},
+          {c:"I'm gonna be a fighting man", r:"I'm gonna be a fighting man"}]},
+      { id:"been-told", title:"I don't know but I've been told", tempo:"quick", license:TRAD, source:"Oral tradition (U.S. military, all services)", form:"repeat after me",
+        lines:[
+          {c:"I don't know but I've been told", r:"I don't know but I've been told"},
+          {c:"Streets of heaven are paved with gold", r:"Streets of heaven are paved with gold"},
+          {c:"I don't know but it's been said", r:"I don't know but it's been said"},
+          {c:"Air Force wings are made of lead", r:"Air Force wings are made of lead"},
+          {c:"I don't know but I've heard it say", r:"I don't know but I've heard it say"},
+          {c:"Army's marching all the way", r:"Army's marching all the way"}]},
+      { id:"airborne-ranger", title:"I wanna be an Airborne Ranger", tempo:"double", license:TRAD + " Clean verses only.", source:"Oral tradition (U.S. Army)", form:"repeat after me",
+        lines:[
+          {c:"I wanna be an Airborne Ranger", r:"I wanna be an Airborne Ranger"},
+          {c:"Live a life of guts and danger", r:"Live a life of guts and danger"},
+          {c:"Airborne Ranger, life of danger", r:"Airborne Ranger, life of danger"},
+          {c:"Up at dawn and on the run", r:"Up at dawn and on the run"},
+          {c:"Mission first till the job is done", r:"Mission first till the job is done"}]},
+      { id:"granny", title:"When my granny was ninety-one", tempo:"double", license:TRAD, source:"Oral tradition (U.S. military PT runs)", form:"repeat after me",
+        lines:[
+          {c:"When my granny was ninety-one", r:"When my granny was ninety-one"},
+          {c:"She did PT just for fun", r:"She did PT just for fun"},
+          {c:"When my granny was ninety-two", r:"When my granny was ninety-two"},
+          {c:"She did PT better than you", r:"She did PT better than you"},
+          {c:"When my granny was ninety-three", r:"When my granny was ninety-three"},
+          {c:"She did PT better than me", r:"She did PT better than me"},
+          {c:"When my granny was ninety-four", r:"When my granny was ninety-four"},
+          {c:"She did PT more and more", r:"She did PT more and more"}]}
+    ]}];
+  /* Deliberately EXCLUDED:
+     - "Sound Off" (the Duckworth Chant) and Jody verses taken from it ("I had a good home but I left",
+       "Ain't no use in going home…"). Willie Lee Duckworth and Bernard Lentz copyrighted it
+       (Shapiro, Bernstein & Co., 1951; renewed 1979), and ASCAP collects royalties on it.
+     - Anything from a commercial cadence album, film, or book, and any cadence set to a pop song. */
+  return {
+    packs,
+    /** Hook for future (e.g. premium/licensed) packs: {id,title,tier,license,cadences:[...]} */
+    registerPack(pack){ if(!pack||!pack.id||!Array.isArray(pack.cadences)) throw new Error("bad pack"); packs.push(pack); document.dispatchEvent(new Event("cadencepacks")); },
+    all(){ return packs.flatMap(p=>p.cadences.map(c=>Object.assign({pack:p.id, tier:p.tier}, c))); }
+  };
+})();
+</script>

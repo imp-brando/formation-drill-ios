@@ -1,0 +1,36 @@
+# XcodeGen spec. The generated FormationDrill.xcodeproj is committed too, so Xcode users can just open it.
+# Regenerate after adding files:  brew install xcodegen && cd ios && xcodegen generate
+name: FormationDrill
+options:
+  bundleIdPrefix: io.github.impbrando
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+targets:
+  FormationDrill:
+    type: application
+    platform: iOS
+    sources:
+      - path: FormationDrill
+        excludes:
+          - "Web"
+          - "Web/**"
+      - path: FormationDrill/Web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.impbrando.formationdrill
+        PRODUCT_NAME: Formation Drill
+        INFOPLIST_FILE: FormationDrill/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: NO
+    scheme: {}
