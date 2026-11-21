@@ -1,5 +1,7 @@
-// Recruits after flanks / rear march / column turns / counter column: they must fall in at the squads' tail,
-// keep 4 squads (4 files in column, 4 ranks in line), sit exactly on the grid, and cause no false break.
+// Recruits after flanks / rear march / column turns / counter column (user rule t76u): a recruit always falls in
+// at the back of the farthest-right file for the way the formation faces (incomplete rear rank fills from the
+// right), joins never add a file (4 files facing the front; after a flank the files stay as many as they are),
+// everyone sits exactly on the grid, and there's no false break.
 const puppeteer=require('puppeteer-core'), P=require('path');
 const CMDS={rflank:"right flank march",lflank:"left flank march",rear:"rear march",colL:"column left march",colR:"column right march",counter:"counter column march",halt:"platoon halt",fwd:"forward march"};
 const SEQS=[["rflank"],["lflank"],["rflank","lflank"],["lflank","rflank"],["rflank","rflank"],["lflank","lflank","lflank"],["rflank","rear"],["lflank","colL"],["rflank","colR"],["colR","rflank"],["rear"],["colL"],["counter"],["rflank","rear","lflank"]];
@@ -15,14 +17,14 @@ const SEQS=[["rflank"],["lflank"],["rflank","lflank"],["lflank","rflank"],["rfla
    FG.sim(800); say("fwd"); FG.sim(1000);
    for(const c of seq){ say(c); FG.sim(c==="counter"?5200:2600); }
    say("halt"); FG.sim(2000);
-   const ids0=new Set(FG.F.ranks.flatMap(rk=>rk.sol.filter(Boolean).map(s=>s.id)));
+   const W0=FG.F.W; const ids0=new Set(FG.F.ranks.flatMap(rk=>rk.sol.filter(Boolean).map(s=>s.id)));
    for(let i=0;i<n;i++){ FG.addRecruit(); FG.sim(150); }
    const inLine=FG.F.inLine;
    FG.sim(600); const atHalt=grid(); atHalt.recruitErr=recruitErr();
    // each new soldier: exactly one step from the squad-mate he fell in beside/behind
    function recruitErr(){ const F=FG.F; let w=0, missing=0;
      F.ranks.forEach((rk,r)=>rk.sol.forEach((s,q)=>{ if(!s||ids0.has(s.id)) return;
-       const nb = F.inLine ? (rk.sol[q-1]||rk.sol[q+1]) : (F.ranks[r-1]&&F.ranks[r-1].sol[q]);
+       const nb = F.ranks[r-1]&&F.ranks[r-1].sol[q];                // the man ahead of him in his file
        if(!nb){ missing++; return; }
        w=Math.max(w, Math.abs(Math.hypot(s.x-nb.x,s.y-nb.y)-1)); }));
      return {worst:+w.toFixed(3), missing}; }
@@ -40,11 +42,11 @@ const SEQS=[["rflank"],["lflank"],["rflank","lflank"],["lflank","rflank"],["rfla
    const A0=along.find(a=>a[0]===0)[2]+0, L0=lat[0][2]-lat[0][1]*F.interval;
    for(const [r,q,a] of along) worst=Math.max(worst, Math.abs(a-(A0-r*F.rankDist)));
    for(const [r,q,l] of lat) worst=Math.max(worst, Math.abs(l-(L0+q*F.interval)));
-   // squads: in column 4 files; in line 4 ranks
+   // files: joins never add one (4 facing the front)
    const shape={W:F.W, D:F.ranks.length, inLine:F.inLine};
-   const squadsOK = F.inLine ? F.ranks.length===4 : F.W===4;
-   // at most one partly filled file (in line) or rank (in column)
-   const partial = F.inLine ? [...Array(F.W).keys()].filter(q=>F.ranks.some(rk=>!rk.sol[q])).length : F.ranks.filter(rk=>rk.sol.some(x=>!x)).length;
+   const squadsOK = F.W===W0 && (F.inLine || F.W===4);
+   // at most one incomplete rank, at the back
+   const partial = F.ranks.filter(rk=>rk.sol.some(x=>!x)).length + (F.ranks.slice(0,-1).some(rk=>rk.sol.some(x=>!x)) ? 1 : 0);
    const straight=F.ranks.every(rk=>rk.fs.every(f=>f.seg===F.path.last));
    return {count, worst:+worst.toFixed(3), shape, squadsOK, partial, straight};
    }

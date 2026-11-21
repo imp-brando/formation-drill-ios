@@ -229,11 +229,12 @@ function flankTransform(d){
   const b=dirV(h2); F.path=Path.straight(cx-b[0]*300, cy-b[1]*300, h2);
   const rd=F.interval, iv=F.rankDist; F.rankDist=rd; F.interval=iv;
   ranks2.forEach((rk,r)=>rk.s=300-r*F.rankDist);
-  F.W=W2; F.ranks=ranks2.filter(rk=>rk.sol.some(Boolean)); F.cShift=0;
+  F.W=W2; F.ranks=ranks2; F.cShift=0;
   if(F.closeIv) F.closeIv.axis = F.closeIv.axis==="interval" ? "rankDist" : "interval";   // files became ranks
   // squads were files, now they're ranks (or back again). The squads' tail end is where the old rear rank went.
   F.inLine=!F.inLine; F.lineTail = F.inLine ? (d>0 ? 1 : -1) : 0;
   F._fi=null; fsAll();
+  coverDown();                    // flanks keep the formation; only a broken file/rank is fixed
 }
 
 /* ---------- Rear march / about face: the rear rank becomes the front rank ---------- */
@@ -260,6 +261,7 @@ function rearTransform(){
   F.cShift=-(F.cShift||0); F.lineTail=-(F.lineTail||0);    // files reversed: the line's tail end swaps sides
   for(const rk of F.ranks) rk.s=rankS(rk);
   for(const s of allSoldiers()) s.faceAnim={off:-Math.PI,t0:now(),dur:clock.period*.9};
+  coverDown();                    // the old incomplete rear rank is now in front: those men go to the back
 }
 
 /* ---------- Counter column (4 files), per TC 3-21.5 ---------- */
@@ -304,7 +306,7 @@ function finishCounterColumn(){
   for(let sq=0;sq<4;sq++){ const p=cc.paths[sq].posAt(cc.headS[sq]); cx+=p.x/4; cy+=p.y/4; h=p.h; }
   const b=dirV(h); F.path=Path.straight(cx-b[0]*300, cy-b[1]*300, h);
   F.ranks.forEach((rk,r)=>{ let d=0; for(let q=0;q<4;q++) d+=cc.depthQ[q][r]/4; rk.s=300-d; });
-  F.cShift=0; F._fi=null; fsAll();
+  F.cShift=0; F._fi=null; fsAll(); coverDown();
   for(const s of allSoldiers()) s.trans={x:s.x,y:s.y,t0:now(),dur:clock.period*.6};
   F.mode="column"; F.cc=null; G.busy=null; setStateTag();
 }
@@ -446,28 +448,90 @@ function spawnRecruit(){
   }
 }
 function addRecruitToFormation(){
-  // In line (after a flank) the squads are ranks: a recruit falls in at the squad's tail, which is the end
-  // file of the line, filled front to back, then a new file opens at that end. In column: rear rank, right first.
-  if(F.inLine){
-    if(F.mode!=="column" || G.busy || !F.ranks.every(rk=>rk.fs.every(onNewestSeg))){ G.pendingRecruits=(G.pendingRecruits||0)+1; return; }   // mid-maneuver: fall in once straight
-    let tq = F.lineTail>0 ? F.W-1 : 0;
-    let rk=F.ranks.find(rk=>!rk.sol[tq]);
-    if(!rk){
-      for(const r of F.ranks){
-        const ref=r.fs[tq], f={seg:ref.seg, s:ref.s};
-        if(F.lineTail>0){ r.sol.push(null); r.fs.push(f); } else { r.sol.unshift(null); r.fs.unshift(f); }
-      }
-      F.W++; F.cShift=(F.cShift||0)+(F.lineTail>0 ? .5 : -.5);       // every existing soldier keeps his lane
-      tq = F.lineTail>0 ? F.W-1 : 0; F._fi=null; rk=F.ranks[0];
-    }
-    const s=newSoldier(); rk.sol[tq]=s; placeRecruit(s, tq, rk); return;
+  // A new soldier falls in at the back of the farthest-right file (relative to the way the formation
+  // faces). If that file is already as long as the formation is deep, the next file to the left that is
+  // short gets him (the incomplete rear rank fills from the right file inward); when every file is full a
+  // new rear rank starts on the right file. Joins never add a file, so facing the front there are never
+  // more than 4 files.
+  if(F.mode!=="column"){ G.pendingRecruits=(G.pendingRecruits||0)+1; return; }   // counter column: fall in once it's done
+  coverDown();
+  const s=newSoldier(), [r,q]=joinSlot(), rk=F.ranks[r];
+  rk.sol[q]=s; placeRecruit(s, q, rk);
+}
+/** File q's men, front to back: [rank index...] */
+function fileRanks(q){ const out=[]; F.ranks.forEach((rk,r)=>{ if(rk.sol[q]) out.push(r); }); return out; }
+/** Where the next man falls in: [rank, file]. Adds a rear rank when every file reaches the back. */
+function joinSlot(){
+  const D=F.ranks.length;
+  for(let q=F.W-1;q>=0;q--){ const fr=fileRanks(q), last=fr.length? fr[fr.length-1] : -1; if(last<D-1) return [last+1, q]; }
+  addRearRank(); return [F.ranks.length-1, F.W-1];
+}
+function addRearRank(){
+  const last=F.ranks[F.ranks.length-1];
+  const fs=last.fs.map((f,q)=>{ const w=fileWalk(q,f,-F.rankDist); return {seg:w.seg,s:w.s}; });
+  const rk={sol:new Array(F.W).fill(null), fs, s:0}; rk.s=rankS(rk); F.ranks.push(rk); return rk;
+}
+/** Remove empty file q; the lanes of the remaining files stay put, except a gap in the middle closes
+    toward the right file. */
+function dropFile(q){
+  for(const rk of F.ranks){ rk.sol.splice(q,1); rk.fs.splice(q,1); }
+  F.cShift=(F.cShift||0) + (q===F.W-1 ? -.5 : .5);
+  F.W--; F._fi=null;
+}
+/* ---------- Cover down (automatic after joins and every change of direction) ----------
+   Fixes only what is broken; a clean formation (and a plain flank or facing of one) doesn't move:
+   1. men ahead of the front rank (an incomplete rank that ended up in front) go to the back;
+   2. inside a file, men close up toward the front, so no gaps (a short outside file standing at the
+      rear end after a facing is left as it is);
+   3. empty ranks and files are dropped (a gap between files closes toward the right file);
+   4. facing the front (not flanked) there are never more than 4 files: the men of the extra outside
+      file go to the back;
+   5. when only the rear rank is incomplete, its men stand in the right-hand files.
+   Returns true if anybody moved. */
+const MAX_FILES=4;
+function coverDown(){
+  if(!F || F.mode!=="column" || !F.ranks.length) return false;
+  const slotOf=new Map(); F.ranks.forEach((rk,r)=>rk.sol.forEach((s,q)=>{ if(s) slotOf.set(s,{rk,q,x:s.x,y:s.y}); }));
+  if(!slotOf.size) return false;
+  const extra=[];
+  // 1) an incomplete rank standing in front of a fuller one (after about face / rear march) is ahead of
+  //    the front rank: its men go to the back. Empty leading ranks just drop (nobody moves).
+  const nIn=rk=>rk.sol.filter(Boolean).length;
+  while(F.ranks.length>1 && nIn(F.ranks[0])<nIn(F.ranks[1])){
+    const rk=F.ranks.shift(); for(const m of rk.sol) if(m) extra.push(m);
   }
-  const last=F.ranks[F.ranks.length-1], s=newSoldier();
-  let empty=-1; for(let sq=F.W-1;sq>=0;sq--) if(!last.sol[sq]){ empty=sq; break; }   // fill from the right file
-  if(empty>=0){ last.sol[empty]=s; placeRecruit(s, empty, last); }
-  else { const sol=new Array(F.W).fill(null); sol[F.W-1]=s;
-    const fs=last.fs.map((f,q)=>{ const w=fileWalk(q,f,-F.rankDist); return {seg:w.seg,s:w.s}; });
-    const rk={sol, fs, s:0}; rk.s=rankS(rk); F.ranks.push(rk); placeRecruit(s, F.W-1, rk); }
+  // 3) empty files
+  for(let q=F.W-1;q>=0;q--) if(!F.ranks.some(rk=>rk.sol[q])) dropFile(q);
+  // 4) facing the front: at most 4 files; the shorter outside file covers down at the back
+  while(!F.inLine && F.W>MAX_FILES){
+    const nL=fileRanks(0).length, nR=fileRanks(F.W-1).length, q = nL<nR ? 0 : F.W-1;
+    for(const rk of F.ranks) if(rk.sol[q]){ extra.push(rk.sol[q]); rk.sol[q]=null; }
+    dropFile(q);
+  }
+  // 2) close up inside each file
+  const D=F.ranks.length;
+  for(let q=0;q<F.W;q++){
+    const fr=fileRanks(q); if(!fr.length) continue;
+    const contiguous = fr[fr.length-1]-fr[0]===fr.length-1;
+    if(contiguous && (fr[0]===0 || ((q===0||q===F.W-1) && fr[fr.length-1]===D-1))) continue;
+    const men=fr.map(r=>F.ranks[r].sol[q]); fr.forEach(r=>F.ranks[r].sol[q]=null); men.forEach((m,i)=>F.ranks[i].sol[q]=m);
+  }
+  while(F.ranks.length>1 && !F.ranks[F.ranks.length-1].sol.some(Boolean)) F.ranks.pop();
+  // strays fall in at the back, right file first
+  for(const m of extra){ const [r,q]=joinSlot(); F.ranks[r].sol[q]=m; }
+  // 5) a lone incomplete rear rank stands on the right
+  const R=F.ranks.length-1, rear=F.ranks[R];
+  if(R>0 && F.ranks.slice(0,R).every(rk=>rk.sol.every(Boolean))){
+    const men=rear.sol.filter(Boolean);
+    if(men.length<F.W && rear.sol.slice(F.W-men.length).some(x=>!x)){ rear.sol.fill(null); men.forEach((m,i)=>rear.sol[F.W-men.length+i]=m); }
+  }
+  for(const rk of F.ranks) rk.s=rankS(rk);
+  // anybody whose spot changed steps over to it (two beats), keeping his own ragged offset
+  let moved=false;
+  F.ranks.forEach(rk=>rk.sol.forEach((s,q)=>{ if(!s) return; const o=slotOf.get(s);
+    if(!o || o.rk!==rk || o.q!==q || extra.includes(s)){ moved=true; s.trans={x:o?o.x:s.x, y:o?o.y:s.y, t0:now(), dur:clock.period*2}; } }));
+  if(moved || extra.length) F._fi=null;
+  return moved;
 }
 /** Put a new soldier straight onto his slot (facing the formation's direction), so nobody straggles. */
 function placeRecruit(s, q, rk){
